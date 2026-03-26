@@ -1,5 +1,5 @@
--- BLADE BALL PARRY FIXED
--- Lightweight, No Lag, 100% Work
+-- BLADE BALL PARRY - XENO OPTIMIZED
+-- Disesuaikan untuk executor Xeno, minim lag, parry akurat
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -7,42 +7,47 @@ local VirtualInput = game:GetService("VirtualInputManager")
 local LP = Players.LocalPlayer
 local Mouse = LP:GetMouse()
 
--- Konfigurasi
-local PARRY_KEY = "F"
+-- Konfigurasi (sesuaikan jika perlu)
+local PARRY_KEY = "F"  -- ganti ke key yang dipakai game
 local ACTIVE = true
-local PARRY_COOLDOWN = 0
-local PARRY_DELAY_MS = 0.08
+local LAST_PARRY = 0
+local PARRY_RANGE = 20  -- jarak parry dalam stud
 
--- ========== FUNGSI PARRY ==========
-local function Parry()
-    if tick() - PARRY_COOLDOWN < 0.15 then return end
-    PARRY_COOLDOWN = tick()
+-- ========== FUNGSI PARRY UNTUK XENO ==========
+local function DoParry()
+    if tick() - LAST_PARRY < 0.18 then return end
+    LAST_PARRY = tick()
     
-    VirtualInput:SendKeyEvent(true, PARRY_KEY, false, game)
-    wait(PARRY_DELAY_MS)
-    VirtualInput:SendKeyEvent(false, PARRY_KEY, false, game)
+    -- Method 1: VirtualInput (umum)
+    pcall(function()
+        VirtualInput:SendKeyEvent(true, PARRY_KEY, false, game)
+        wait(0.05)
+        VirtualInput:SendKeyEvent(false, PARRY_KEY, false, game)
+    end)
+    
+    -- Method 2: Fallback untuk Xeno (keypress simulation)
+    pcall(function()
+        local ks = game:GetService("KeybindService")
+        if ks and ks:FindFirstChild(PARRY_KEY) then
+            ks[PARRY_KEY]:Fire()
+        end
+    end)
 end
 
--- ========== DETEKSI BOLA DARI GAME OBJECT ==========
--- Blade Ball punya object khusus, biasanya di workspace dengan nama tertentu
-local function GetGameBall()
-    -- Cek semua part di workspace
-    for _, obj in ipairs(workspace:GetChildren()) do
-        if obj:IsA("Part") then
-            local name = obj.Name:lower()
-            -- Blade Ball biasanya bola bernama "Ball" atau "BladeBall"
-            if name:find("ball") or name:find("blade") or name == "Handle" then
-                return obj
+-- ========== DETEKSI BOLA AKURAT ==========
+local function FindBall()
+    -- Blade Ball specific: biasanya bola ada di workspace dengan nama tertentu
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            local name = v.Name:lower()
+            -- Daftar kemungkinan nama bola di Blade Ball
+            if name:find("ball") or name:find("blade") or name:find("bullet") or name == "Handle" then
+                return v
             end
-        end
-        -- Cek juga di dalam model
-        if obj:IsA("Model") then
-            for _, part in ipairs(obj:GetChildren()) do
-                if part:IsA("Part") then
-                    local name = part.Name:lower()
-                    if name:find("ball") or name:find("blade") then
-                        return part
-                    end
+            -- Cek berdasarkan ukuran (bola biasanya radius 2-5)
+            if v.Size.X > 2 and v.Size.X < 8 and v.Size.Y > 2 and v.Size.Y < 8 then
+                if v.Size.Z > 2 and v.Size.Z < 8 then
+                    return v
                 end
             end
         end
@@ -50,106 +55,160 @@ local function GetGameBall()
     return nil
 end
 
--- ========== CEK APAKAH BOLA MENDEKAT ==========
-local function IsBallNear()
+-- ========== CEK JARAK ==========
+local function IsBallInRange()
     local char = LP.Character
     if not char then return false end
     
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return false end
     
-    local ball = GetGameBall()
+    local ball = FindBall()
     if not ball then return false end
     
     local distance = (ball.Position - root.Position).Magnitude
-    
-    -- Parry saat jarak dekat (15 stud)
-    -- Tanpa velocity check biar ringan
-    return distance < 18
+    return distance < PARRY_RANGE
 end
 
 -- ========== MAIN LOOP ==========
 RunService.Heartbeat:Connect(function()
-    if not ACTIVE then return end
-    
-    if IsBallNear() then
-        Parry()
+    if ACTIVE and IsBallInRange() then
+        DoParry()
     end
 end)
 
--- ========== MANUAL PARRY ==========
-Mouse.KeyDown:Connect(function(key)
-    if key:lower() == "f" then
-        Parry()
+-- ========== TELEPORT KE BOLA (opsional) ==========
+local function TeleportToBall()
+    local ball = FindBall()
+    local char = LP.Character
+    if ball and char then
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.CFrame = ball.CFrame * CFrame.new(0, 3, 0)
+        end
     end
-end)
+end
 
--- ========== GUI MINIMAL ==========
+-- ========== GUI MINIMAL UNTUK XENO ==========
 local gui = Instance.new("ScreenGui")
-gui.Name = "ParryGUI"
+gui.Name = "BladeParry"
+gui.ResetOnSpawn = false
 gui.Parent = game:GetService("CoreGui")
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 150, 0, 70)
-frame.Position = UDim2.new(0, 10, 0, 10)
-frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-frame.BackgroundTransparency = 0.5
-frame.BorderSizePixel = 0
-frame.Parent = gui
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 180, 0, 95)
+main.Position = UDim2.new(0, 8, 0, 8)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+main.BackgroundTransparency = 0.2
+main.BorderSizePixel = 0
+main.Parent = gui
 
 local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 6)
-corner.Parent = frame
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = main
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 20)
+title.Size = UDim2.new(1, 0, 0, 24)
 title.BackgroundTransparency = 1
-title.Text = "⚡ Blade Parry"
-title.TextColor3 = Color3.fromRGB(255, 200, 0)
-title.TextSize = 12
+title.Text = "⚡ BLADE PARRY"
+title.TextColor3 = Color3.fromRGB(255, 180, 50)
+title.TextSize = 14
 title.Font = Enum.Font.GothamBold
-title.Parent = frame
+title.Parent = main
 
 local status = Instance.new("TextLabel")
 status.Size = UDim2.new(1, 0, 0, 20)
-status.Position = UDim2.new(0, 0, 0, 22)
+status.Position = UDim2.new(0, 0, 0, 26)
 status.BackgroundTransparency = 1
-status.Text = "STATUS: ACTIVE"
-status.TextColor3 = Color3.fromRGB(0, 255, 0)
-status.TextSize = 11
+status.Text = "● ACTIVE"
+status.TextColor3 = Color3.fromRGB(0, 255, 100)
+status.TextSize = 12
 status.Font = Enum.Font.Gotham
-status.Parent = frame
+status.Parent = main
 
-local toggle = Instance.new("TextButton")
-toggle.Size = UDim2.new(0, 50, 0, 22)
-toggle.Position = UDim2.new(0.5, -25, 0, 45)
-toggle.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-toggle.Text = "OFF"
-toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggle.TextSize = 10
-toggle.Font = Enum.Font.GothamBold
-toggle.Parent = frame
+local rangeText = Instance.new("TextLabel")
+rangeText.Size = UDim2.new(1, 0, 0, 18)
+rangeText.Position = UDim2.new(0, 0, 0, 46)
+rangeText.BackgroundTransparency = 1
+rangeText.Text = "Range: " .. PARRY_RANGE .. " stud"
+rangeText.TextColor3 = Color3.fromRGB(180, 180, 180)
+rangeText.TextSize = 10
+rangeText.Font = Enum.Font.Gotham
+rangeText.Parent = main
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 70, 0, 24)
+toggleBtn.Position = UDim2.new(0, 8, 0, 66)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 130, 70)
+toggleBtn.Text = "OFF"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 12
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = main
+
+local teleBtn = Instance.new("TextButton")
+teleBtn.Size = UDim2.new(0, 70, 0, 24)
+teleBtn.Position = UDim2.new(0, 90, 0, 66)
+teleBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 100)
+teleBtn.Text = "TP BALL"
+teleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+teleBtn.TextSize = 12
+teleBtn.Font = Enum.Font.GothamBold
+teleBtn.Parent = main
 
 local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 4)
-btnCorner.Parent = toggle
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = toggleBtn
 
-toggle.MouseButton1Click:Connect(function()
+local teleCorner = Instance.new("UICorner")
+teleCorner.CornerRadius = UDim.new(0, 6)
+teleCorner.Parent = teleBtn
+
+toggleBtn.MouseButton1Click:Connect(function()
     ACTIVE = not ACTIVE
     if ACTIVE then
-        toggle.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        toggle.Text = "ON"
-        status.Text = "STATUS: ACTIVE"
-        status.TextColor3 = Color3.fromRGB(0, 255, 0)
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 130, 70)
+        toggleBtn.Text = "ON"
+        status.Text = "● ACTIVE"
+        status.TextColor3 = Color3.fromRGB(0, 255, 100)
     else
-        toggle.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-        toggle.Text = "OFF"
-        status.Text = "STATUS: OFF"
-        status.TextColor3 = Color3.fromRGB(255, 0, 0)
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(130, 0, 0)
+        toggleBtn.Text = "OFF"
+        status.Text = "○ OFF"
+        status.TextColor3 = Color3.fromRGB(255, 100, 100)
     end
 end)
 
--- Auto ON
-toggle.MouseButton1Click:Fire()
+teleBtn.MouseButton1Click:Connect(function()
+    TeleportToBall()
+    status.Text = "⚡ TELEPORTED"
+    wait(0.5)
+    status.Text = ACTIVE and "● ACTIVE" or "○ OFF"
+end)
 
-print("BLADE PARRY LOADED - Tekan F untuk parry manual | Jarak parry: 18 stud")
+-- ========== KEYBINDS ==========
+Mouse.KeyDown:Connect(function(key)
+    local k = key:lower()
+    if k == "f" then
+        DoParry()
+    elseif k == "t" then
+        TeleportToBall()
+    elseif k == "r" then
+        ACTIVE = not ACTIVE
+        if ACTIVE then
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 130, 70)
+            toggleBtn.Text = "ON"
+            status.Text = "● ACTIVE"
+        else
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(130, 0, 0)
+            toggleBtn.Text = "OFF"
+            status.Text = "○ OFF"
+        end
+    end
+end)
+
+-- Auto start
+toggleBtn.MouseButton1Click:Fire()
+
+print("[XENO] Blade Parry Loaded")
+print("F = Parry manual | R = Toggle Auto | T = Teleport to Ball")
